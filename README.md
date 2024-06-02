@@ -31,3 +31,17 @@ implementation details, etc.), so it's actually not really worth your time to
 try and get the "foundations" down. There's a lot of outdated slop on the
 internet, so IMO your best bet is doing something similar to this - a top-down
 approach.
+
+# Usage
+
+Download the weights from HF (https://huggingface.co/google-bert/bert-large-uncased-whole-word-masking)
+
+remap + load in weights from HF to the custom implementation
+```
+python3 convert_hf.py /path/to/google-bert/bert-large-uncased-whole-word-masking/model.safetensors /path/to/output/dir
+```
+
+check the results
+```
+python3 check.py  --hf_model_path=/path/to/google-bert/bert-large-uncased-whole-word-masking --custom_model_path=/path/to/output/dir
+```
