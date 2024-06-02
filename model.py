@@ -15,7 +15,6 @@ class BertConfig:
     layer_norm_eps: float = 1e-12
     dtype = torch.float32
 
-    # embedding config
     vocab_size: int = 30522
     max_position_embeddings = 512
 
@@ -107,7 +106,6 @@ class BertEncoder(nn.Module):
 
         for mod in self.layer:
             x = mod(x, src_mask=src_mask, src_key_padding_mask=src_key_padding_mask)
-
         return x
 
 class BertModel(nn.Module):
@@ -119,6 +117,7 @@ class BertModel(nn.Module):
             hidden_size=config.hidden_dim,
             max_position_embeddings=config.max_position_embeddings,
         )
+
         self.encoder = BertEncoder(config)
     
     def forward(self, input_ids, attention_mask=None):
