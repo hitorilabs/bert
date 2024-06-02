@@ -1,0 +1,6 @@
+torch
+numpy
+safetensors
+transformers
+accelerate
+fire
