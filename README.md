@@ -3,8 +3,9 @@
 This repo houses the experiments for BERT my beloved. 
 
 Initially, I was just looking for a nice clean torch implementation of BERT
-where I can easily check against the one provided by HuggingFace. Meaning, map
-the weights from HF onto the custom implementation and check if it can produce
+where I can easily check against the one provided by HuggingFace. 
+
+i.e. map the weights from HF onto the custom implementation and check if it can produce
 roughly the same results.
 
 It ended up being a bit more tedious than I thought, so I thought it would be
