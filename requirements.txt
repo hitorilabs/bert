@@ -3,8 +3,5 @@ numpy
 safetensors
 transformers
 accelerate
-fire
 
-orjson
-structlog
 click

@@ -1,3 +1,4 @@
+import click
 import torch
 from safetensors import safe_open
 from safetensors.torch import save_model
@@ -6,12 +7,16 @@ from transformers import AutoTokenizer
 from pathlib import Path
 from model import BertModel, BertConfig
 
-def load_weights_from_safetensors(path_to_hf_model: Path, output_path: Path = Path("./models"), model_prefix=""):
+@click.command()
+@click.option("-p", "--path-to-hf", default="structlog", help='Type of logger to benchmark')
+@click.option("-o", "--output-path", default="./models", help='Type of logger to benchmark')
+@click.option("-m", "--model-prefix", default="./models", help='Type of logger to benchmark')
+def load_weights_from_safetensors(path_to_hf: str, output_path: str, model_prefix=""):
     if model_prefix:
         model_prefix += "."
 
-    path_to_hf_model = Path(path_to_hf_model)
-    model_path = Path(*path_to_hf_model.parts[-2:])
+    path_to_hf = Path(path_to_hf)
+    model_path = Path(*path_to_hf.parts[-2:])
     output_path = Path(output_path) / model_path
 
     config = BertConfig()
@@ -41,7 +46,7 @@ def load_weights_from_safetensors(path_to_hf_model: Path, output_path: Path = Pa
     name_mapping = model_weight_map
     model_state_dict = model.state_dict()
 
-    with safe_open(path_to_hf_model / "model.safetensors", framework="pt") as f:
+    with safe_open(path_to_hf / "model.safetensors", framework="pt") as f:
         for key in f.keys():
             if key == f'{model_prefix}embeddings.word_embeddings.weight':
                 new_name = name_mapping[key]
@@ -75,10 +80,8 @@ def load_weights_from_safetensors(path_to_hf_model: Path, output_path: Path = Pa
     save_model(model, (output_path / "model.safetensors").as_posix())
 
     print(f"Saving Tokenizer to {output_path}...")
-    tokenizer = AutoTokenizer.from_pretrained(path_to_hf_model)
+    tokenizer = AutoTokenizer.from_pretrained(path_to_hf)
     tokenizer.save_pretrained(output_path)
 
 if __name__ == "__main__":
-    import fire
-
-    fire.Fire(load_weights_from_safetensors)
+    load_weights_from_safetensors()
