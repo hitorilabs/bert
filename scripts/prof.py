@@ -61,8 +61,8 @@ def check_model(path_to_hf: str, custom_model_path: str):
         ) as prof:
             with record_function("model_inference"):
                 for _ in range(6):
-                    custom_output = custom_model.encoder(custom_embeddings_output)
                     prof.step()
+                    custom_output = custom_model.encoder(custom_embeddings_output)
 
         def trace_handler(p):
             p.export_chrome_trace("hf_trace" + str(p.step_num) + ".json")
@@ -74,13 +74,34 @@ def check_model(path_to_hf: str, custom_model_path: str):
         ) as prof:
             with record_function("model_inference"):
                 for _ in range(6):
-                    hf_output = hf_model.encoder(hf_embeddings_output).last_hidden_state
                     prof.step()
+                    hf_output = hf_model.encoder(hf_embeddings_output).last_hidden_state
 
         print(custom_output)
         print(hf_output)
         print(torch.allclose(custom_output, hf_output))
         print(torch.max(torch.abs(custom_output - hf_output)))
+
+        def trace_handler(p):
+            p.export_chrome_trace("custom_trace_full_" + str(p.step_num) + ".json")
+
+        with profile(
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+            schedule=schedule,
+            on_trace_ready=trace_handler,
+            profile_memory=True,
+            record_shapes=True,
+            with_stack=True,
+        ) as prof:
+            with record_function("model_inference"):
+                for _ in range(6):
+                    prof.step()
+                    data = tokenizer(
+                        "example text",
+                        return_tensors="pt",
+                        return_token_type_ids=False,
+                    ).to(device)
+                    custom_output = custom_model(**data)
 
 
 if __name__ == "__main__":
