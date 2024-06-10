@@ -7,6 +7,10 @@ dynamic = ["dependencies", "optional-dependencies"]
 dependencies = {file = ["requirements.txt"]}
 optional-dependencies = {dev = { file = ["requirements-dev.txt"] }}
 
+[tool.setuptools.packages.find]
+where = ["bert"]
+namespaces = false
+
 [tool.ruff.lint]
 # Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.
 # Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
@@ -39,7 +43,7 @@ target-version = "py38"
 exclude = [
     "models",
     "alt",
-    
+
     ".bzr",
     ".direnv",
     ".eggs",

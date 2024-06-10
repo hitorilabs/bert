@@ -5,7 +5,7 @@ from transformers import AutoTokenizer, AutoModel
 import click
 
 from torch.profiler import profile, record_function, ProfilerActivity
-from src.base_model import BertConfig, BertModel
+from bert.base_model import BertConfig, BertModel
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 

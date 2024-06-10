@@ -5,7 +5,7 @@ from safetensors.torch import save_model
 from transformers import AutoTokenizer
 
 from pathlib import Path
-from src.model import BertModel, BertConfig
+from bert.model import BertModel, BertConfig
 
 
 @click.command()
