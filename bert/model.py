@@ -30,9 +30,8 @@ class BertModel(nn.Module):
         self.encoder = BertEncoder(config)
 
     def forward(self, input_ids, attention_mask=None):
-        embeddings = self.embeddings(input_ids)
         encoder_output = self.encoder(
-            embeddings,
+            self.embeddings(input_ids),
             src_key_padding_mask=(attention_mask == 0),
         )
         return encoder_output
@@ -53,14 +52,8 @@ class BertEmbeddings(nn.Module):
         )
 
     def forward(self, input_ids):
-        input_shape = input_ids.size()
-        seq_length = input_shape[1]
-        position_ids = self.position_ids[:, 0:seq_length]
-
-        word_embeddings = self.word_embeddings(input_ids)
-        position_embeddings = self.position_embeddings(position_ids)
-
-        embeddings = word_embeddings + position_embeddings
+        position_ids = self.position_ids[:, 0 : input_ids.shape[1]]
+        embeddings = self.word_embeddings(input_ids) + self.position_embeddings(position_ids)
         embeddings = self.layer_norm(embeddings)
         embeddings = self.dropout(embeddings)
 
@@ -82,7 +75,7 @@ class BertEncoder(nn.Module):
         )
 
         for mod in self.layer:
-            x = mod(x, src_mask=src_mask, src_key_padding_mask=src_key_padding_mask)
+            x = mod(x, src_key_padding_mask=src_key_padding_mask)
         return x
 
 
@@ -104,16 +97,14 @@ class BertEncoderLayer(nn.Module):
         self.ffn = BertFeedForwardLayer(config)
         self.ffn_norm = nn.LayerNorm(config.hidden_dim, eps=config.layer_norm_eps, bias=True, elementwise_affine=True)
 
-    def forward(self, x, src_mask=None, src_key_padding_mask=None):
-        x = self.self_attn_norm(
-            x
-            + self.self_attn_dropout(
-                self.self_attn(x, x, x, attn_mask=src_mask, key_padding_mask=src_key_padding_mask, need_weights=False)[
-                    0
-                ]
-            )
+    def forward(self, x, src_key_padding_mask=None):
+        x = x + self.self_attn_dropout(
+            self.self_attn(x, x, x, key_padding_mask=src_key_padding_mask, need_weights=False)[0]
         )
-        x = self.ffn_norm(x + self.ffn(x))
+        x = self.self_attn_norm(x)
+
+        x = x + self.ffn(x)
+        x = self.ffn_norm(x)
         return x
 
 
