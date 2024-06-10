@@ -1,16 +1,16 @@
+import click
+from pathlib import Path
+
 import torch
 from safetensors.torch import load_model
-from pathlib import Path
 from transformers import AutoTokenizer, AutoModel
-import click
 
-from torch.profiler import profile, record_function, ProfilerActivity
 from base_model import BertConfig, BertModel
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
 @click.command()
-@click.option("-p", "--path-to-hf", help="Path to local model directory with downloaded HF models")
+@click.option("-p", "--path-to-hf", required=True, help="Path to local model directory with downloaded HF models")
 @click.option("-c", "--custom-model-path", default="./models", help="Path to custom model (from convert_hf.py)")
 def check_model(path_to_hf: str, custom_model_path: str):
 
@@ -47,11 +47,9 @@ def check_model(path_to_hf: str, custom_model_path: str):
         print(custom_embeddings_output == hf_embeddings_output)
 
     with torch.no_grad():
-        with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
-            custom_output = custom_model.encoder(custom_embeddings_output)
-            hf_output = hf_model.encoder(hf_embeddings_output).last_hidden_state
+        custom_output = custom_model.encoder(custom_embeddings_output)
+        hf_output = hf_model.encoder(hf_embeddings_output).last_hidden_state
 
-        prof.export_chrome_trace("trace.json")
         print(custom_output)
         print(hf_output)
         print(torch.allclose(custom_output, hf_output))
