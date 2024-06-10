@@ -95,8 +95,11 @@ class BertEncoderLayer(nn.Module):
         self.ffn_norm = nn.LayerNorm(config.hidden_dim, eps=config.layer_norm_eps, bias=True, elementwise_affine=True)
 
     def forward(self, x, src_key_padding_mask=None):
-        x = self.self_attn_norm(x + self.self_attn(x, x, x, key_padding_mask=src_key_padding_mask, need_weights=False)[0])
-        x = self.ffn_norm(x + self.ffn(x))
+        x = x + self.self_attn(x, x, x, key_padding_mask=src_key_padding_mask, need_weights=False)[0]
+        x = self.self_attn_norm(x)
+
+        x = x + self.ffn(x)
+        x = self.ffn_norm(x)
         return x
 
 
