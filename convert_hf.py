@@ -8,9 +8,9 @@ from pathlib import Path
 from model import BertModel, BertConfig
 
 @click.command()
-@click.option("-p", "--path-to-hf", default="structlog", help='Type of logger to benchmark')
-@click.option("-o", "--output-path", default="./models", help='Type of logger to benchmark')
-@click.option("-m", "--model-prefix", default="./models", help='Type of logger to benchmark')
+@click.option("-p", "--path-to-hf", required=True, help='Local path to BERT downloaded from HF')
+@click.option("-o", "--output-path", default="./models", help='Local output path (default: ./models)')
+@click.option("-m", "--model-prefix", default="bert", help='Prefix for model weights (e.g. `bert.*`)')
 def load_weights_from_safetensors(path_to_hf: str, output_path: str, model_prefix=""):
     if model_prefix:
         model_prefix += "."
