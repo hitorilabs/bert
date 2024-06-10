@@ -58,7 +58,6 @@ def check_model(path_to_hf: str, custom_model_path: str):
             activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
             schedule=schedule,
             on_trace_ready=trace_handler,
-            profile_memory=True,
         ) as prof:
             with record_function("model_inference"):
                 for _ in range(6):
@@ -72,7 +71,6 @@ def check_model(path_to_hf: str, custom_model_path: str):
             activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
             schedule=schedule,
             on_trace_ready=trace_handler,
-            profile_memory=True,
         ) as prof:
             with record_function("model_inference"):
                 for _ in range(6):
