@@ -11,6 +11,26 @@ roughly the same results.
 It ended up being a bit more tedious than I thought, so I thought it would be
 worth writing up some notes about it.
 
+# Changes
+
+- Merged `bert.embeddings.token_type_embeddings.weight` into
+`bert.embeddings.word_embeddings.weight` because I don't plan on using or
+training on the Next Sentence Prediction task at all.
+- QKV weights are concatenated into one weight (specifically for Multi-head Attention block)
+  - i.e.
+    - `encoder.layer.{i}.self_attn.in_proj_weight`
+      - `bert.encoder.layer.{i}.attention.self.query.weight`
+      - `bert.encoder.layer.{i}.attention.self.key.weight`
+      - `bert.encoder.layer.{i}.attention.self.value.weight`
+    - `encoder.layer.{i}.self_attn.in_proj_bias`
+      - `bert.encoder.layer.{i}.attention.self.query.bias`
+      - `bert.encoder.layer.{i}.attention.self.key.bias`
+      - `bert.encoder.layer.{i}.attention.self.value.bias`
+- cls/pooler is often unnecessary for many applications since CLS pooling
+  usually works out of the box on the last layer.
+
+# Notes
+
 There's a slight difference (about `2e-06`) in results you would get compared
 to HF, but it's probably still within range of floating point precision
 problems... right?
@@ -26,6 +46,8 @@ some things I didn't know about or didn't expect:
 - still not 100% sure, but I think the key difference in my first (incorrect)
   implementation is in the way the skip connection is computed in
   TransformerEncoderLayer vs. my BertEncoderLayer
+- Next Sentence Prediction (NSP) as a pre-training task is mostly fake
+  according to RoBERTa
 
 BERT as we know it today has changed a lot over the years (pre-training,
 implementation details, etc.), so it's actually not really worth your time to

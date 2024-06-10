@@ -3,4 +3,5 @@ numpy
 safetensors
 transformers
 accelerate
-fire
+
+click
