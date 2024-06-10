@@ -57,6 +57,21 @@ def check_model(path_to_hf: str, custom_model_path: str):
         print(torch.allclose(custom_output, hf_output))
         print(torch.max(torch.abs(custom_output - hf_output)))
 
+    with torch.no_grad():
+        data = tokenizer(
+            ["example text", "make the example have uneven lengths"],
+            return_tensors="pt",
+            return_token_type_ids=False,
+            padding=True,
+        ).to(device)
+        custom_output = custom_model(**data)
+        hf_output = hf_model(**data).last_hidden_state
+
+        print(custom_output)
+        print(hf_output)
+        print(torch.allclose(custom_output, hf_output))
+        print(torch.max(torch.abs(custom_output - hf_output)))
+
 
 if __name__ == "__main__":
     check_model()
