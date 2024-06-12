@@ -1,4 +1,5 @@
 import click
+from tqdm import tqdm
 import torch
 from safetensors import safe_open
 from safetensors.torch import save_model
@@ -6,6 +7,66 @@ from transformers import AutoTokenizer
 
 from pathlib import Path
 from bert.model import BertModel, BertConfig
+
+
+def load_embedding_weights(model_state_dict, hf_fp, model_prefix=""):
+    embeddings_map = {
+        "embeddings.layer_norm.bias": "embeddings.LayerNorm.bias",
+        "embeddings.layer_norm.weight": "embeddings.LayerNorm.weight",
+        "embeddings.position_embeddings.weight": "embeddings.position_embeddings.weight",
+    }
+
+    for custom_key, hf_key in tqdm(embeddings_map.items(), desc="Loading Embedding Weights..."):
+        model_state_dict[custom_key].copy_(hf_fp.get_tensor(f"{model_prefix}{hf_key}"))
+
+    merged_embeddings = (
+        hf_fp.get_tensor(f"{model_prefix}embeddings.word_embeddings.weight")
+        + hf_fp.get_tensor(f"{model_prefix}embeddings.token_type_embeddings.weight")[0]
+    )
+    model_state_dict["embeddings.word_embeddings.weight"].copy_(merged_embeddings)
+
+
+def load_encoder_weights(model_state_dict, hf_fp, model_prefix="", num_layers=24):
+    attention_qkv_map = {
+        "encoder.layer.{i}.self_attn.in_proj_weight": [
+            "encoder.layer.{i}.attention.self.query.weight",
+            "encoder.layer.{i}.attention.self.key.weight",
+            "encoder.layer.{i}.attention.self.value.weight",
+        ],
+        "encoder.layer.{i}.self_attn.in_proj_bias": [
+            "encoder.layer.{i}.attention.self.query.bias",
+            "encoder.layer.{i}.attention.self.key.bias",
+            "encoder.layer.{i}.attention.self.value.bias",
+        ],
+    }
+    attention_output_map = {
+        "encoder.layer.{i}.self_attn_norm.bias": "encoder.layer.{i}.attention.output.LayerNorm.bias",
+        "encoder.layer.{i}.self_attn_norm.weight": "encoder.layer.{i}.attention.output.LayerNorm.weight",
+        "encoder.layer.{i}.self_attn.out_proj.bias": "encoder.layer.{i}.attention.output.dense.bias",
+        "encoder.layer.{i}.self_attn.out_proj.weight": "encoder.layer.{i}.attention.output.dense.weight",
+    }
+
+    encoder_map = {
+        "encoder.layer.{i}.ffn_norm.bias": "encoder.layer.{i}.output.LayerNorm.bias",
+        "encoder.layer.{i}.ffn_norm.weight": "encoder.layer.{i}.output.LayerNorm.weight",
+        "encoder.layer.{i}.ffn.intermediate_dense.bias": "encoder.layer.{i}.intermediate.dense.bias",
+        "encoder.layer.{i}.ffn.intermediate_dense.weight": "encoder.layer.{i}.intermediate.dense.weight",
+        "encoder.layer.{i}.ffn.output_dense.bias": "encoder.layer.{i}.output.dense.bias",
+        "encoder.layer.{i}.ffn.output_dense.weight": "encoder.layer.{i}.output.dense.weight",
+    }
+
+    for i in tqdm(range(num_layers), desc="Loading Encoder Layers..."):
+        for custom_key, hf_keys in attention_qkv_map.items():
+            combined_weight = torch.cat(
+                [hf_fp.get_tensor(f"{model_prefix}{hf_key}".format(i=i)) for hf_key in hf_keys], dim=0
+            )
+            model_state_dict[custom_key.format(i=i)].copy_(combined_weight)
+
+        for custom_key, hf_key in attention_output_map.items():
+            model_state_dict[custom_key.format(i=i)].copy_(hf_fp.get_tensor(f"{model_prefix}{hf_key}".format(i=i)))
+
+        for custom_key, hf_key in encoder_map.items():
+            model_state_dict[custom_key.format(i=i)].copy_(hf_fp.get_tensor(f"{model_prefix}{hf_key}".format(i=i)))
 
 
 @click.command()
@@ -23,61 +84,11 @@ def load_weights_from_safetensors(path_to_hf: str, output_path: str, model_prefi
     config = BertConfig()
     model = BertModel(config)
 
-    model_weight_map = {
-        f"{model_prefix}embeddings.LayerNorm.bias": "embeddings.layer_norm.bias",
-        f"{model_prefix}embeddings.LayerNorm.weight": "embeddings.layer_norm.weight",
-        f"{model_prefix}embeddings.position_embeddings.weight": "embeddings.position_embeddings.weight",
-        f"{model_prefix}embeddings.word_embeddings.weight": "embeddings.word_embeddings.weight",
-    }
-
-    for i in range(config.num_layers):
-        model_weight_map.update(
-            {
-                f"{model_prefix}encoder.layer.{i}.attention.output.dense.bias": f"encoder.layer.{i}.self_attn.out_proj.bias",
-                f"{model_prefix}encoder.layer.{i}.attention.output.dense.weight": f"encoder.layer.{i}.self_attn.out_proj.weight",
-                f"{model_prefix}encoder.layer.{i}.attention.output.LayerNorm.bias": f"encoder.layer.{i}.self_attn_norm.bias",
-                f"{model_prefix}encoder.layer.{i}.attention.output.LayerNorm.weight": f"encoder.layer.{i}.self_attn_norm.weight",
-                f"{model_prefix}encoder.layer.{i}.intermediate.dense.bias": f"encoder.layer.{i}.ffn.intermediate_dense.bias",
-                f"{model_prefix}encoder.layer.{i}.intermediate.dense.weight": f"encoder.layer.{i}.ffn.intermediate_dense.weight",
-                f"{model_prefix}encoder.layer.{i}.output.dense.bias": f"encoder.layer.{i}.ffn.output_dense.bias",
-                f"{model_prefix}encoder.layer.{i}.output.dense.weight": f"encoder.layer.{i}.ffn.output_dense.weight",
-                f"{model_prefix}encoder.layer.{i}.output.LayerNorm.bias": f"encoder.layer.{i}.ffn_norm.bias",
-                f"{model_prefix}encoder.layer.{i}.output.LayerNorm.weight": f"encoder.layer.{i}.ffn_norm.weight",
-            }
-        )
-
-    name_mapping = model_weight_map
     model_state_dict = model.state_dict()
 
     with safe_open(path_to_hf / "model.safetensors", framework="pt") as f:
-        for key in f.keys():
-            if key == f"{model_prefix}embeddings.word_embeddings.weight":
-                new_name = name_mapping[key]
-
-                # merge token_type_embeddings to word_embeddings
-                merged = f.get_tensor(key) + f.get_tensor(f"{model_prefix}embeddings.token_type_embeddings.weight")[0]
-                print(f"{key} -> {new_name}")
-                model_state_dict[new_name].copy_(merged)
-            elif key in name_mapping:
-                new_name = name_mapping[key]
-                print(f"{key} -> {new_name}")
-                model_state_dict[new_name].copy_(f.get_tensor(key))
-            else:
-                print(f"  == skipping: {key}")
-
-        # Handle QKV concatenation
-        for i in range(24):
-            q_weight = f.get_tensor(f"{model_prefix}encoder.layer.{i}.attention.self.query.weight")
-            k_weight = f.get_tensor(f"{model_prefix}encoder.layer.{i}.attention.self.key.weight")
-            v_weight = f.get_tensor(f"{model_prefix}encoder.layer.{i}.attention.self.value.weight")
-            combined_weight = torch.cat((q_weight, k_weight, v_weight), dim=0)
-            model_state_dict[f"encoder.layer.{i}.self_attn.in_proj_weight"].copy_(combined_weight)
-
-            q_bias = f.get_tensor(f"{model_prefix}encoder.layer.{i}.attention.self.query.bias")
-            k_bias = f.get_tensor(f"{model_prefix}encoder.layer.{i}.attention.self.key.bias")
-            v_bias = f.get_tensor(f"{model_prefix}encoder.layer.{i}.attention.self.value.bias")
-            combined_bias = torch.cat((q_bias, k_bias, v_bias), dim=0)
-            model_state_dict[f"encoder.layer.{i}.self_attn.in_proj_bias"].copy_(combined_bias)
+        load_embedding_weights(model_state_dict, f, model_prefix=model_prefix)
+        load_encoder_weights(model_state_dict, f, model_prefix=model_prefix)
 
     output_path.mkdir(parents=True, exist_ok=True)
     save_model(model, (output_path / "model.safetensors").as_posix())
