@@ -6,7 +6,7 @@ from safetensors.torch import save_model
 from transformers import AutoTokenizer
 
 from pathlib import Path
-from bert.model import BertModel, BertConfig
+from bert.model import BertForMaskedLM, BertModel, BertConfig
 
 
 def load_embedding_weights(model_state_dict, hf_fp, model_prefix=""):
@@ -17,13 +17,13 @@ def load_embedding_weights(model_state_dict, hf_fp, model_prefix=""):
     }
 
     for custom_key, hf_key in tqdm(embeddings_map.items(), desc="Loading Embedding Weights..."):
-        model_state_dict[custom_key].copy_(hf_fp.get_tensor(f"{model_prefix}{hf_key}"))
+        model_state_dict[f"{model_prefix}{custom_key}"].copy_(hf_fp.get_tensor(f"{model_prefix}{hf_key}"))
 
     merged_embeddings = (
         hf_fp.get_tensor(f"{model_prefix}embeddings.word_embeddings.weight")
         + hf_fp.get_tensor(f"{model_prefix}embeddings.token_type_embeddings.weight")[0]
     )
-    model_state_dict["embeddings.word_embeddings.weight"].copy_(merged_embeddings)
+    model_state_dict[f"{model_prefix}embeddings.word_embeddings.weight"].copy_(merged_embeddings)
 
 
 def load_encoder_weights(model_state_dict, hf_fp, model_prefix="", num_layers=24):
@@ -60,13 +60,30 @@ def load_encoder_weights(model_state_dict, hf_fp, model_prefix="", num_layers=24
             combined_weight = torch.cat(
                 [hf_fp.get_tensor(f"{model_prefix}{hf_key}".format(i=i)) for hf_key in hf_keys], dim=0
             )
-            model_state_dict[custom_key.format(i=i)].copy_(combined_weight)
+            model_state_dict[f"{model_prefix}{custom_key}".format(i=i)].copy_(combined_weight)
 
         for custom_key, hf_key in attention_output_map.items():
-            model_state_dict[custom_key.format(i=i)].copy_(hf_fp.get_tensor(f"{model_prefix}{hf_key}".format(i=i)))
+            model_state_dict[f"{model_prefix}{custom_key}".format(i=i)].copy_(
+                hf_fp.get_tensor(f"{model_prefix}{hf_key}".format(i=i))
+            )
 
         for custom_key, hf_key in encoder_map.items():
-            model_state_dict[custom_key.format(i=i)].copy_(hf_fp.get_tensor(f"{model_prefix}{hf_key}".format(i=i)))
+            model_state_dict[f"{model_prefix}{custom_key}".format(i=i)].copy_(
+                hf_fp.get_tensor(f"{model_prefix}{hf_key}".format(i=i))
+            )
+
+
+def load_mlm_head_weights(model_state_dict, hf_fp, model_prefix=""):
+    mlm_head_map = {
+        "mlm_prediction_head.bias": "cls.predictions.bias",
+        "mlm_prediction_head.transform.layer_norm.bias": "cls.predictions.transform.LayerNorm.bias",
+        "mlm_prediction_head.transform.layer_norm.weight": "cls.predictions.transform.LayerNorm.weight",
+        "mlm_prediction_head.transform.dense.bias": "cls.predictions.transform.dense.bias",
+        "mlm_prediction_head.transform.dense.weight": "cls.predictions.transform.dense.weight",
+    }
+
+    for custom_key, hf_key in mlm_head_map.items():
+        model_state_dict[custom_key].copy_(hf_fp.get_tensor(hf_key))
 
 
 @click.command()
@@ -82,13 +99,15 @@ def load_weights_from_safetensors(path_to_hf: str, output_path: str, model_prefi
     output_path = Path(output_path) / model_path
 
     config = BertConfig()
-    model = BertModel(config)
+    # model = BertModel(config)
+    model = BertForMaskedLM(config)
 
     model_state_dict = model.state_dict()
 
     with safe_open(path_to_hf / "model.safetensors", framework="pt") as f:
         load_embedding_weights(model_state_dict, f, model_prefix=model_prefix)
-        load_encoder_weights(model_state_dict, f, model_prefix=model_prefix)
+        load_encoder_weights(model_state_dict, f, model_prefix=model_prefix, num_layers=config.num_layers)
+        load_mlm_head_weights(model_state_dict, f, model_prefix=model_prefix)
 
     output_path.mkdir(parents=True, exist_ok=True)
     save_model(model, (output_path / "model.safetensors").as_posix())

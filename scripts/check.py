@@ -5,7 +5,7 @@ import torch
 from safetensors.torch import load_model
 from transformers import AutoTokenizer, AutoModel
 
-from bert.base_model import BertConfig, BertModel
+from bert.model import BertConfig, BertForEmbedding
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -22,12 +22,12 @@ def check_model(path_to_hf: str, custom_model_path: str):
 
     with torch.device(device):
         config = BertConfig()
-        custom_model = BertModel(config)
+        custom_model = BertForEmbedding(config)
         missing, unexpected = load_model(
-            custom_model, (custom_model_path / "model.safetensors").as_posix(), device="cuda"
+            custom_model, (custom_model_path / "model.safetensors").as_posix(), device="cuda", strict=False
         )
         if missing or unexpected:
-            print(missing, unexpected)
+            print("skipping...", missing, unexpected)
 
         hf_model = AutoModel.from_pretrained(hf_model_path.as_posix(), device_map=device)
         custom_model.eval()
@@ -40,8 +40,14 @@ def check_model(path_to_hf: str, custom_model_path: str):
             return_token_type_ids=False,
             return_attention_mask=False,
         ).to(device)
-        custom_embeddings_output = custom_model.embeddings(**data)
-        hf_embeddings_output = hf_model.embeddings(**data)
+
+        data_for_hf = tokenizer(
+            "example text",
+            return_tensors="pt",
+            return_attention_mask=False,
+        ).to(device)
+        custom_embeddings_output = custom_model.bert.embeddings(**data)
+        hf_embeddings_output = hf_model.embeddings(**data_for_hf)
 
         print(f"{custom_embeddings_output}")
         print(f"{hf_embeddings_output}")
@@ -49,7 +55,7 @@ def check_model(path_to_hf: str, custom_model_path: str):
         print(custom_embeddings_output == hf_embeddings_output)
 
     with torch.no_grad():
-        custom_output = custom_model.encoder(custom_embeddings_output)
+        custom_output = custom_model.bert.encoder(custom_embeddings_output)
         hf_output = hf_model.encoder(hf_embeddings_output).last_hidden_state
 
         print(custom_output)
